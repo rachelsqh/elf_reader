@@ -3,7 +3,10 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <elf.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 
+#if 0
 static void print_chdr(int fd)
 {
 	Elf64_Chdr	chdr;
@@ -19,7 +22,6 @@ static void print_sym(int fd)
 	printf("\t name\ttype/binding\t visibility\tindex\tvalue\tsize\n");
 	printf("%08x\t%04x\t%04x\t%08x\t%016lx\t%016lx\n",sym.st_name,sym.st_info,sym.st_other,sym.st_shndx,sym.st_value,sym.st_size);
 }
-
 static void print_syminfo()
 {
 	Elf64_Syminfo syminfo;
@@ -47,48 +49,106 @@ void print_rela()
 }
 
 
-static void print_shdr(int fd,Elf64_Ehdr *ehdr)
+#endif
+#define sec_type(sh_type)(\
+		(SHT_PROGBITS == sh_type)?\
+			"progbits":(\
+		(SHT_SYMTAB == sh_type) ?\
+			"symtab":(\
+		(SHT_STRTAB == sh_type) ?\
+			"strtab":(\
+	        (SHT_RELA == sh_type) ?\
+			"rela":(\
+	        (SHT_HASH == sh_type) ?\
+			"hash":(\
+	        (SHT_DYNAMIC == sh_type) ? \
+			"dynamic":(\
+	        (SHT_NOTE == sh_type) ? \
+			"note":(\
+	        (SHT_NOBITS == sh_type) ? \
+			"nobits":(\
+	        (SHT_REL == sh_type) ? \
+			"rel": (\
+	        (SHT_SHLIB == sh_type) ? \
+			"shlib": (\
+	        (SHT_DYNSYM == sh_type) ? \
+			"dynsym":(\
+	        (SHT_LOPROC == sh_type) ? \
+			"loproc":(\
+	        (SHT_HIPROC == sh_type) ? \
+			"hiproc":(\
+	        (SHT_LOUSER == sh_type) ? \
+			"louser":(\
+	        (SHT_HIUSER == sh_type) ? \
+			"hiuser":"none")))))))))))))))
+
+
+#define ph_type(ph_type)(\
+		(PT_LOAD == ph_type)?\
+			"load":(\
+		(PT_DYNAMIC == ph_type) ?\
+			"dynamic":(\
+		(PT_INTERP == ph_type) ?\
+			"interp":(\
+	        (PT_NOTE == ph_type) ?\
+			"note":(\
+	        (PT_SHLIB == ph_type) ?\
+			"shlib":(\
+	        (PT_PHDR == ph_type) ? \
+			"phdr":(\
+	        (PT_TLS == ph_type) ? \
+			"tls":(\
+	        (PT_LOOS == ph_type) ? \
+			"loop":(\
+	        (PT_HIOS == ph_type) ? \
+			"hios": (\
+	        (PT_LOPROC == ph_type) ? \
+			"loproc": (\
+	        (PT_HIPROC == ph_type) ? \
+			"hiproc":(\
+	        (PT_GNU_EH_FRAME == ph_type) ? \
+			"eh_frame":(\
+	        (PT_GNU_STACK == ph_type) ? \
+			"stack":"none")))))))))))))
+
+
+static void print_shdr(void **buf,Elf64_Ehdr *ehdr)
 {
-	Elf64_Shdr	shdr;
+	Elf64_Shdr	*shdr = NULL;
 	int i = 0,ret = 0;
-	lseek(fd,ehdr->e_shoff,SEEK_SET);
+	char type_name[64];
+	char *addr = (char *)*buf;
+	int str_offset = 0;
+	
 	printf("\t Section header table e_shnum = %d\n",ehdr->e_shnum);
 	printf("\tname\ttype\t flags\tvirtual addr\tfile offset\t size\tlink\tinfo\talign\tentry size\n");
-		
-	
+	shdr = (Elf64_Shdr *)&addr[ehdr->e_shoff + ehdr->e_shstrndx * sizeof(Elf64_Shdr)];
+	str_offset = shdr->sh_offset;	
 	for(i = 0;i < ehdr->e_shnum;i++){
-		ret = read(fd,&shdr,sizeof(Elf64_Shdr));
-		if(sizeof(Elf64_Shdr) != ret){
-			return;
-		}
-		printf("[%d]\t0x%08x\t0x%08x\t0x%016lx\t%016lx\t%016lx\t%08x\t%08x\t%16lx\t%016lx\n",i,shdr.sh_name,shdr.sh_type,shdr.sh_flags,shdr.sh_offset,shdr.sh_size,shdr.sh_link,shdr.sh_info,shdr.sh_addralign,shdr.sh_entsize);	
+		shdr = (Elf64_Shdr *)&addr[ehdr->e_shoff + i * sizeof(Elf64_Shdr)];
+		printf("[%d]\t%-8s\t%-8s\t0x%016lx\t%016lx\t%016lx\t%08x\t%08x\t%16lx\t%016lx\n",i,(char *)&addr[str_offset + shdr->sh_name],sec_type(shdr->sh_type),shdr->sh_flags,shdr->sh_offset,shdr->sh_size,shdr->sh_link,shdr->sh_info,shdr->sh_addralign,shdr->sh_entsize);	
 	}
 
 }
 
 
-
-static void print_phdr(int fd, Elf64_Ehdr *ehdr)
+static void print_phdr(void **buf, Elf64_Ehdr *ehdr)
 {
-	Elf64_Phdr	phdr;
+	Elf64_Phdr	*phdr = NULL;
 	int ret = 0;
 	int i = 0;
-
-	lseek(fd,ehdr->e_phoff,SEEK_SET);
 
 	printf("\t Program header table e_phnum = %x\n",ehdr->e_phnum);
 
 	printf("index\ttype\toffset\tvirtual address\t physical address\t size in file\tsize in mem\talign\n");
+	
 	for(i = 0;i < ehdr->e_phnum;i++){
-		ret = read(fd,&phdr,sizeof(Elf64_Phdr));
-		if(sizeof(Elf64_Phdr) != ret){
-			return;
-		}
-		printf("[%d]\t0x%08x\t0x%08x\t%016lx\t%016lx\t%016lx\t%016lx\t%016lx\t%016lx\n",i,phdr.p_type,phdr.p_flags,
-			phdr.p_offset,phdr.p_vaddr,phdr.p_paddr,phdr.p_filesz,phdr.p_memsz,phdr.p_align);	
+		phdr = ((Elf64_Phdr *)(&(((char *)(*buf))[ehdr->e_phoff + i * sizeof(Elf64_Phdr)])));
+		printf("[%d]\t%08s\t0x%08x\t%016lx\t%016lx\t%016lx\t%016lx\t%016lx\t%016lx\n",i,ph_type(phdr->p_type),phdr->p_flags,phdr->p_offset,phdr->p_vaddr,phdr->p_paddr,phdr->p_filesz,phdr->p_memsz,phdr->p_align);	
 	}
 
 }
+
 static void print_ehdr(Elf64_Ehdr *ehdr)
 {
 	int i = 0;
@@ -119,26 +179,36 @@ int main(int argc,char *argv[])
 
 	int fd = 0;
 	int ret = 0;
-	
+	void *buf = NULL;
+	int len = 0;
+	struct stat state;
 	if(2 > argc){
 		return -1;
 	}
 
+	ret = stat(argv[1],&state);
+	if(ret)
+		return ret;
 	fd = open(argv[1],O_RDONLY);
 	if(0 > fd){	
 		return -1;
 	}
-
-		
+	len = state.st_size;	
 	ret = read(fd,&ehdr,sizeof(Elf64_Ehdr));
 	if(sizeof(Elf64_Ehdr) != ret){
 		return -2;
 	}
-
+	buf = mmap(NULL,len,PROT_READ,MAP_PRIVATE,fd,0);
+	if(!buf){
+		close(fd);
+		printf("%s:%d\n",__func__,__LINE__);
+		return -1;
+	}
 			
 	print_ehdr(&ehdr);
-	print_phdr(fd,&ehdr);
-	print_shdr(fd,&ehdr);
+	print_shdr(&buf,&ehdr);
+	print_phdr(&buf,&ehdr);
+	munmap(buf,len);
 	close(fd);
 	return 0;
 }
