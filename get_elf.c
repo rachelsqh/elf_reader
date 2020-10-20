@@ -6,50 +6,6 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 
-#if 0
-static void print_chdr(int fd)
-{
-	Elf64_Chdr	chdr;
-	lseek(fd,,SEEK_SET);	
-	printf("\t compression format\tuncompressed data size\t uncompressed data alignment\n");
-	printf("%08x\t%08x\t%016x\t%016x\n",chdr.ch_type,chdr.ch_reserved,chdr.ch_size,chdr.ch_addralign);
-}
-
-static void print_sym(int fd)
-{
-	Elf64_Sym	sym;
-	lseek(fd,,SEEK_SET);	
-	printf("\t name\ttype/binding\t visibility\tindex\tvalue\tsize\n");
-	printf("%08x\t%04x\t%04x\t%08x\t%016lx\t%016lx\n",sym.st_name,sym.st_info,sym.st_other,sym.st_shndx,sym.st_value,sym.st_size);
-}
-static void print_syminfo()
-{
-	Elf64_Syminfo syminfo;
-	printf("\tdirect bindings/symbol bound to\n");
-	printf("%08x\t%08x\n",syminfo.si_boundto,syminfo.si_flags);
-
-
-}
-
-void print_rel()
-{
-	Elf64_Rel rel;
-
-	printf("\t r_offset\tr_info\n");
-	printf("%016lx\t%016lx\n",rel.r_offset,rel.r_info);
-}
-
-
-void print_rela()
-{
-	Elf64_Rela rela;
-
-	printf("\t r_offset\tr_info\n");
-	printf("%016lx\t%016lx\t%016x\n",rela.r_offset,rela.r_info,rela.r_addend);
-}
-
-
-#endif
 #define sec_type(sh_type)(\
 		(SHT_PROGBITS == sh_type)?\
 			"progbits":(\
@@ -111,7 +67,40 @@ void print_rela()
 	        (PT_GNU_STACK == ph_type) ? \
 			"stack":"none")))))))))))))
 
+static void sym_info(Elf64_Ehdr *ehdr,void **buf,Elf64_Off sh_offset,Elf64_Xword sh_size)
+{
 
+	Elf64_Shdr *shdr = NULL;
+	Elf64_Sym *sym = NULL;
+	int i = 0,size = 0;
+	Elf64_Off str_offset = 0;
+
+	char *addr = (char *)*buf;
+	shdr = (Elf64_Shdr *)&addr[ehdr->e_shoff + ehdr->e_shstrndx * sizeof(Elf64_Shdr)];
+	str_offset = shdr->sh_offset;	
+	size = sh_size / sizeof(Elf64_Sym);
+	printf("SYMBOL TABLE:\n");
+	printf("st_name\tst_info\tst_other\tst_shndx\tst_value\tst_size\n");
+	for(i = 0;i < size;i++){
+		sym = (Elf64_Sym *)&addr[sh_offset + i * sizeof(Elf64_Sym)];
+	printf("[%d]\t%-8s\t%-8s\t0x%016lx\t%016lx\t%016lx\t%08x\t\n",i,(char *)&addr[str_offset + sym->st_name],sym->st_info,sym->st_other,sym->st_shndx,sym->st_value,sym->st_size);	
+	}
+}
+static void print_sym(void **buf,Elf64_Ehdr *ehdr)
+{
+	Elf64_Shdr *shdr = NULL;
+	char *addr = (char *)*buf;
+	int i = 0,flag = 0;
+	for(i = 0;i < ehdr->e_shnum;i++){
+		shdr = (Elf64_Shdr *)&addr[ehdr->e_shoff + i * sizeof(Elf64_Shdr)];
+		if(SHT_SYMTAB == shdr->sh_type){
+			printf("%s:%d\n",__func__,__LINE__);
+			sym_info(ehdr,buf,shdr->sh_offset,shdr->sh_size);
+		}
+			printf("%s:%d\n",__func__,__LINE__);
+
+	}
+}	
 static void print_shdr(void **buf,Elf64_Ehdr *ehdr)
 {
 	Elf64_Shdr	*shdr = NULL;
@@ -130,7 +119,6 @@ static void print_shdr(void **buf,Elf64_Ehdr *ehdr)
 	}
 
 }
-
 
 static void print_phdr(void **buf, Elf64_Ehdr *ehdr)
 {
@@ -208,6 +196,7 @@ int main(int argc,char *argv[])
 	print_ehdr(&ehdr);
 	print_shdr(&buf,&ehdr);
 	print_phdr(&buf,&ehdr);
+	print_sym(&buf,&ehdr);
 	munmap(buf,len);
 	close(fd);
 	return 0;
