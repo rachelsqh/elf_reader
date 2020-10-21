@@ -67,6 +67,42 @@
 	        (PT_GNU_STACK == ph_type) ? \
 			"stack":"none")))))))))))))
 
+
+
+static void dsym_info(Elf64_Ehdr *ehdr,void **buf,Elf64_Off sh_offset,Elf64_Xword sh_size)
+{
+
+	Elf64_Shdr *shdr = NULL;
+	Elf64_Sym *sym = NULL;
+	int i = 0,size = 0;
+	Elf64_Off str_offset = 0;
+
+	char *addr = (char *)*buf;
+	shdr = (Elf64_Shdr *)&addr[ehdr->e_shoff + ehdr->e_shstrndx * sizeof(Elf64_Shdr)];
+	str_offset = shdr->sh_offset;	
+	size = sh_size / sizeof(Elf64_Sym);
+	printf("SYMBOL TABLE:entrys = %d\n",size);
+	printf("st_name\tst_info\tst_other\tst_shndx\tst_value\tst_size\n");
+	for(i = 0;i < size;i++){
+		sym = (Elf64_Sym *)&addr[sh_offset + i * sizeof(Elf64_Sym)];
+	printf("[%d]\t%s\n",i,(char *)&addr[str_offset + sym->st_name]);	
+	}
+}
+static void print_dsym(void **buf,Elf64_Ehdr *ehdr)
+{
+
+	Elf64_Shdr *shdr = NULL;
+	char *addr = (char *)*buf;
+	int i = 0,flag = 0;
+	for(i = 0;i < ehdr->e_shnum;i++){
+		shdr = (Elf64_Shdr *)&addr[ehdr->e_shoff + i * sizeof(Elf64_Shdr)];
+		if(SHT_DYNSYM == shdr->sh_type){
+			dsym_info(ehdr,buf,shdr->sh_offset,shdr->sh_size);
+		}
+
+	}
+
+}
 static void sym_info(Elf64_Ehdr *ehdr,void **buf,Elf64_Off sh_offset,Elf64_Xword sh_size)
 {
 
@@ -79,11 +115,11 @@ static void sym_info(Elf64_Ehdr *ehdr,void **buf,Elf64_Off sh_offset,Elf64_Xword
 	shdr = (Elf64_Shdr *)&addr[ehdr->e_shoff + ehdr->e_shstrndx * sizeof(Elf64_Shdr)];
 	str_offset = shdr->sh_offset;	
 	size = sh_size / sizeof(Elf64_Sym);
-	printf("SYMBOL TABLE:\n");
+	printf("SYMBOL TABLE:entrys = %d\n",size);
 	printf("st_name\tst_info\tst_other\tst_shndx\tst_value\tst_size\n");
 	for(i = 0;i < size;i++){
 		sym = (Elf64_Sym *)&addr[sh_offset + i * sizeof(Elf64_Sym)];
-	printf("[%d]\t%-8s\t%-8s\t0x%016lx\t%016lx\t%016lx\t%08x\t\n",i,(char *)&addr[str_offset + sym->st_name],sym->st_info,sym->st_other,sym->st_shndx,sym->st_value,sym->st_size);	
+	printf("[%d]\t%s\n",i,(char *)&addr[str_offset + sym->st_name]);	
 	}
 }
 static void print_sym(void **buf,Elf64_Ehdr *ehdr)
@@ -94,10 +130,8 @@ static void print_sym(void **buf,Elf64_Ehdr *ehdr)
 	for(i = 0;i < ehdr->e_shnum;i++){
 		shdr = (Elf64_Shdr *)&addr[ehdr->e_shoff + i * sizeof(Elf64_Shdr)];
 		if(SHT_SYMTAB == shdr->sh_type){
-			printf("%s:%d\n",__func__,__LINE__);
 			sym_info(ehdr,buf,shdr->sh_offset,shdr->sh_size);
 		}
-			printf("%s:%d\n",__func__,__LINE__);
 
 	}
 }	
@@ -197,6 +231,8 @@ int main(int argc,char *argv[])
 	print_shdr(&buf,&ehdr);
 	print_phdr(&buf,&ehdr);
 	print_sym(&buf,&ehdr);
+	print_dsym(&buf,&ehdr);
+	printf("buf +size=%lx\n",buf + len);
 	munmap(buf,len);
 	close(fd);
 	return 0;
