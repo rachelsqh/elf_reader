@@ -114,6 +114,26 @@
 
 
 
+static void dis_program(void **buf,Elf64_Ehdr *ehdr)//SHT_PROGBITS
+{
+
+}
+static void print_nhdr(void **buf,Elf64_Ehdr *ehdr)
+{
+	Elf64_Shdr *shdr = NULL;
+	char *addr = (char *)*buf;
+	int i = 0,flag = 0;
+	for(i = 0;i < ehdr->e_shnum;i++){
+		shdr = (Elf64_Shdr *)&addr[ehdr->e_shoff + i * sizeof(Elf64_Shdr)];
+		if(SHT_NOTE == shdr->sh_type){
+			note_info(ehdr,buf,shdr->sh_offset,shdr->sh_size);
+		}
+
+	}
+
+}
+
+
 
 static void dsym_info(Elf64_Ehdr *ehdr,void **buf,Elf64_Off sh_offset,Elf64_Xword sh_size)
 {
@@ -149,7 +169,7 @@ static void print_dsym(void **buf,Elf64_Ehdr *ehdr)
 	}
 
 }
-static void sym_info(Elf64_Ehdr *ehdr,void **buf,Elf64_Off sh_offset,Elf64_Xword sh_size)
+static void sym_info(Elf64_Ehdr *ehdr,void **buf,Elf64_Off sh_offset,Elf64_Xword sh_size) //SHT_SYMTAB
 {
 
 	Elf64_Shdr *shdr = NULL;
@@ -295,7 +315,7 @@ int main(int argc,char *argv[])
 	print_shdr(&buf,&ehdr);
 	print_phdr(&buf,&ehdr);
 	//print_sym(&buf,&ehdr);
-	//print_dsym(&buf,&ehdr);
+	print_dsym(&buf,&ehdr);
 	//printf("buf +size=%lx\n",buf + len);
 	munmap(buf,len);
 	close(fd);
