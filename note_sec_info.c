@@ -64,6 +64,7 @@ struct Elf_gnu_abi_tag {
 	Elf64_Word	minor;
 	Elf64_Word	subminor;
 };
+#if 0
 #define desc_gnu(type,desc,desc_len)  (\
 		( NT_GNU_BUILD_ID == type) ?({\
 			int i = 0;\
@@ -120,6 +121,10 @@ struct Elf_gnu_abi_tag {
 				if(desc_len < 8)\
 				   sprintf(desc_str,"%s <corrupt GNU_HWCAP> \n",desc_str); \
 			  	else { \
+				   sprintf(desc_str,"%snum entries:%ld,enable mask:%lx\n",desc_str,(*((char *)desc)),(*((char *)desc)));\
+				}\
+			}) :  ({\
+			(NT_GNU_PROPERTY_TYPE_0 == type)
 				    
 
 
@@ -134,10 +139,11 @@ struct Elf_gnu_abi_tag {
 		(!strcmp(name,"FreeBSD")) ? desc_freebsd(type,desc) : (\
 		(!strcmp(name,"NetBsd")) ? desc_netbsd(type,desc) : "UNKNOW")))
 
+#endif
 static void print_shdr(void **buf,Elf64_Ehdr *ehdr)
 {
 	Elf64_Shdr	*shdr = NULL;
-	int i = 0,ret = 0;
+	int i = 0,j = 0,ret = 0;
 	char type_name[64];
 	char *addr = (char *)*buf;
 	int str_offset = 0;
@@ -152,9 +158,16 @@ static void print_shdr(void **buf,Elf64_Ehdr *ehdr)
 			note.nhdr = (Elf64_Nhdr *)&addr[shdr->sh_offset];
 			note.name_data = (char *)note.nhdr + sizeof(Elf64_Nhdr);
 			note.desc_data = note.name_data + note.nhdr->n_namesz;
-			printf("\tname  n_namesz\tn_descsz\tn_type\tdesc\n");
-			printf("\t%s\t0x%-8lx    0x%-08lx    0x%-08lx\t %s\n",note.name_data,note.nhdr->n_namesz,note.nhdr->n_descsz,note.nhdr->n_type,note.desc_data,print_note_desc(note.name_data,note.desc_data));
 
+		printf("Section:[%d]  %s:\n",i,(char *)&addr[str_offset + shdr->sh_name]);	
+			printf("\tname\tn_namesz\tn_descsz\tn_type\n");
+			printf("\t%s\t0x%-8lx\t0x%-08lx\t0x%-08lx\n",note.name_data,note.nhdr->n_namesz,note.nhdr->n_descsz,note.nhdr->n_type);
+			if(note.nhdr->n_descsz > 0)
+			printf("\tdesc:");
+			for(j = 0;j < note.nhdr->n_descsz;j++){
+				printf("0x%02x ",note.desc_data[j] & 0xff);
+			}
+			printf("\n\n");
 		}	
 	}
 
